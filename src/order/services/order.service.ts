@@ -1,39 +1,62 @@
-import { Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { v4 } from 'uuid';
 
 import { Order } from '../models';
+import { Order as OrderEntity } from '../../database/entities/order.entity';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 
 @Injectable()
 export class OrderService {
-  private orders: Record<string, Order> = {}
+  constructor(
+    @InjectRepository(OrderEntity)
+    private ordersRepository: Repository<OrderEntity>,
+  ) { }
 
-  findById(orderId: string): Order {
-    return this.orders[ orderId ];
-  }
-
-  create(data: any) {
-    const id = v4(v4())
-    const order = {
-      ...data,
-      id,
-      status: 'inProgress',
-    };
-
-    this.orders[ id ] = order;
+  public async findById(orderId: string): Promise<Order> {
+    const order = await this.ordersRepository.findOne({
+      where: { id: orderId },
+    }) as Order;
+    if (!order) {
+      throw new HttpException('Not Found', HttpStatus.NOT_FOUND);
+    }
 
     return order;
   }
 
-  update(orderId, data) {
-    const order = this.findById(orderId);
+  public async create(data: any): Promise<Order> {
+    const id = v4();
+    const order = {
+      ...data,
+      id,
+      status: 'IN_PROGRESS',
+    };
+
+    const createdOrder = await this.ordersRepository.insert(order)
+    return createdOrder ? order : null;
+  }
+
+  public async update(orderId, data) {
+    const order = await this.findById(orderId);
 
     if (!order) {
-      throw new Error('Order does not exist.');
+      throw new HttpException('Not Found', HttpStatus.NOT_FOUND);
     }
-
-    this.orders[ orderId ] = {
+    const updatedOrder = await this.ordersRepository.save({
+      ...order,
       ...data,
-      id: orderId,
+    });
+
+    return updatedOrder || null;
+  }
+
+  public async delete(orderId) {
+    const order = await this.ordersRepository.findOne({
+      where: { id: orderId},
+    });
+    if (!order) {
+      throw new HttpException('Not Found', HttpStatus.NOT_FOUND);
     }
+    return await this.ordersRepository.remove(order);
   }
 }
